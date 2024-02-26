@@ -10,13 +10,16 @@ import { logConsole } from "./middleware/log-console";
 import { Initialize } from "./core/init";
 
 (async () => {
+  console.log(process.env.ORIGIN)
   await Initialize(); //initialize all the system defined parameters and collections
 })(); //IIFE
 
 export const app = new Hono().basePath("/api");
 
 app.use("*", logConsole);
-app.use("*", cors());
+app.use("*", cors({
+  origin: process.env.ORIGIN != undefined ? process.env.ORIGIN: "http://localhost:5173",
+}));
 app.get("/", async (c: Context) => {
   return c.text("Hello world");
 });
