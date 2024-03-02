@@ -6,21 +6,25 @@ import mail from "@routers/mail";
 import auth from "@routers/auth";
 import files from "@routers/files"
 import { cors } from "hono/cors";
-import { logConsole } from "./middleware/log-console";
+import { logConsoleDev, logConsoleProd } from "./middleware/log-console";
 import { Initialize } from "./core/init";
 
 (async () => {
   await Initialize(); //initialize all the system defined parameters and collections
 })(); //IIFE
 
-
 export const app = new Hono().basePath("/api");
 
 app.use("*", cors({
-  origin: process.env.ORIGIN != undefined ? process.env.ORIGIN : "*",
+  origin: '*',
+  allowHeaders: ['X-Custom-Header', 'Upgrade-Insecure-Requests', 'Content-Type'],
+  allowMethods: ['POST', 'GET', 'OPTIONS', 'DELETE', 'PUT', 'PATCH'],
+  exposeHeaders: ['Content-Length'],
+  maxAge: 600,
 }));
 
-app.use("*", logConsole);
+process.env.DEV ? app.use("*", logConsoleDev): app.use("*", logConsoleProd)
+
 app.get("/", async (c: Context) => {
   return c.text("Hello world");
 });
