@@ -32,8 +32,6 @@ app.route("/mail", mail);
 app.route("/auth", auth);
 app.route("/files", files)
 
-
-
 export default {
   port: 3690,
   fetch: app.fetch,
