@@ -13,10 +13,12 @@ import { Socket } from "socket.io";
 import functions from "./routers/functions";
 import stress from "./routers/stress_test";
 import schema from "./routers/schema";
+import index from "./routers/indexing";
 import {io, broadcastRecord} from "./realtime/init";
 import { EventEmitter } from "node:events";
 
 
+import { parseAuthHeader } from "./middleware/parseAuthHeader";
 
 (async () => {
   await Initialize(); //initialize all the system defined parameters and collections
@@ -34,6 +36,8 @@ app.use("*", cors({
 
 process.env.DEV ? app.use("*", logConsoleDev): app.use("*", logConsoleProd)
 
+app.use("*", parseAuthHeader);
+
 app.get("/", async (c: Context) => {
   return c.text("Hello world");
 });
@@ -47,6 +51,7 @@ app.route("/files", files);
 app.route("/functions", functions);
 app.route("/stress", stress);
 app.route("/schema", schema);
+app.route("/index", index);
 
 
 io.listen(3691);
