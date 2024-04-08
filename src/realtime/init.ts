@@ -14,6 +14,7 @@ export const io = new Server({
     methods: ["GET", "POST", "PATCH", "DELETE", "PUT", "OPTIONS"],
     credentials: false,
   },
+  transports: ['websocket']
 });
 
 io.on("connection", (socket) => {
