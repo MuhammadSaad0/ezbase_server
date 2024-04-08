@@ -25,8 +25,9 @@ io.use((socket, next) => {
   next();
 }
 );
+
 io.on("connection", (socket) => {
-  //   console.log(`socket connected: ${socket.id}`);
+//   console.log(`socket connected: ${socket.id}`);
 
   socket.on("subscribe", (data) => {
     const { collection, query } = data;
@@ -89,12 +90,12 @@ export function broadcastRecord(collection: string, record: any): void {
       // Send the record to all subscribers
       //socket event name is the collection name so on sdk the call back of the collection is executed
       app.subscriptions[collection].forEach((sub) => {
-        if (Object.keys(sub.query).length !== 0) {
-          const test = sift(sub.query);
-          // console.log(test(record))
-          if (!test(record)) {
-            return;
-          }
+        if (Object.keys(sub.query).length !== 0 ) {
+            const test = sift(sub.query);
+            // console.log(test(record))
+            if (!test(record)) {
+                return;
+            }
         }
 
         sub.socket.emit(`${collection}`, {
