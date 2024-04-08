@@ -10,7 +10,7 @@ type Subscription = {
 
 export const io = new Server({
   cors: {
-    origin: "*",
+    origin: "https://ezbase-frontend-jyy2ch25t-muhammadsaad0.vercel.app",
     methods: ["GET", "POST", "PATCH", "DELETE", "PUT", "OPTIONS"],
     credentials: false,
   },
