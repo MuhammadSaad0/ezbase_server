@@ -10,15 +10,23 @@ type Subscription = {
 
 export const io = new Server({
   cors: {
-    origin: "https://ezbase-frontend-jyy2ch25t-muhammadsaad0.vercel.app",
+    origin: "*",
     methods: ["GET", "POST", "PATCH", "DELETE", "PUT", "OPTIONS"],
     credentials: false,
+    allowedHeaders: ["*"],
+    exposedHeaders: ["*"]
   },
-  transports: ['websocket']
+  // transports: ['websocket']
 });
-
+io.use((socket, next) => {
+  socket.request.headers["access-control-allow-origin"] = "*";
+  // socket.request.headers('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE');
+  // socket.request.headers('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+}
+);
 io.on("connection", (socket) => {
-//   console.log(`socket connected: ${socket.id}`);
+  //   console.log(`socket connected: ${socket.id}`);
 
   socket.on("subscribe", (data) => {
     const { collection, query } = data;
@@ -81,12 +89,12 @@ export function broadcastRecord(collection: string, record: any): void {
       // Send the record to all subscribers
       //socket event name is the collection name so on sdk the call back of the collection is executed
       app.subscriptions[collection].forEach((sub) => {
-        if (Object.keys(sub.query).length !== 0 ) {
-            const test = sift(sub.query);
-            // console.log(test(record))
-            if (!test(record)) {
-                return;
-            }
+        if (Object.keys(sub.query).length !== 0) {
+          const test = sift(sub.query);
+          // console.log(test(record))
+          if (!test(record)) {
+            return;
+          }
         }
 
         sub.socket.emit(`${collection}`, {
