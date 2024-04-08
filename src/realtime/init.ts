@@ -12,7 +12,7 @@ export const io = new Server({
   cors: {
     origin: "*",
     methods: ["GET", "POST", "PATCH", "DELETE", "PUT", "OPTIONS"],
-    allowedHeaders: ["*"],
+    credentials: false,
   },
 });
 
