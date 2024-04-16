@@ -6,3 +6,6 @@ backups/
 exports/
 files-metadata/
 .env
+dist
+src/benchmark
+data.json

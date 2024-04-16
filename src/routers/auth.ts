@@ -12,10 +12,12 @@ import {
 	deleteRecord,
 	readRecord,
 } from "@src/controllers/record-crud";
+import { fetchRules } from "@src/utils/rules/fetchRules";
 import sign from "@src/utils/auth/sign";
 import Database from "@src/database/database_handler";
 import { OAuth2Client } from "google-auth-library";
 import { html } from "hono/html";
+import { constructRulesMemoryObject } from "@src/utils/rules/constructRulesMemoryObject";
 
 const auth = new Hono();
 
@@ -37,8 +39,6 @@ auth.post("/admin/create", async (c: Context) => {
 
 		const token = await sign(payload, process.env.USER_AUTH_KEY || "user_key");
 
-		console.log(token);
-
 		// setCookie(c, "admin", JSON.stringify(email), {
 		// 	httpOnly: true,
 		// 	secure: true,
@@ -46,10 +46,9 @@ auth.post("/admin/create", async (c: Context) => {
 		// 	maxAge: 60 * 60 * 24 * 7,
 		// });
 		return c.json({ error: null, data: token });
-	} catch (error) {
+	} catch (error:any) {
 		console.log(error);
-
-		return c.json({ error, data: null });
+		return c.json({ error: error.message, data: null },401);
 	}
 	return c.text("Create admin");
 });
@@ -58,10 +57,9 @@ auth.get("/admin", async (c: Context) => {
 	try {
 		// check if an admin exists
 		const admin: boolean = await checkAdminExists();
-		console.log('Admin check', admin);
 		return c.json({ error: null, data: admin });
-	} catch (error) {
-		return c.json({ error, data: null });
+	} catch (error:any) {
+		return c.json({ error: error.message, data: null },401);
 	}
 	return c.text("Get admin");
 });
@@ -70,11 +68,9 @@ auth.get("/admins", async (c: Context) => {
 	try {
 		// check if an admin exists
 		const admins: boolean = await getAdmins();
-		console.log(admins);
-
 		return c.json({ error: null, data: admins });
-	} catch (error) {
-
+	} catch (error:any) {
+		return c.json({ error: error.message, data: null },401);
 	}
 	return c.text("Get all admins");
 });
@@ -90,10 +86,8 @@ auth.delete("/admin/delete", async (c: Context) => {
 		if (!deleted) throw new Error("Failed to delete admin");
 
 		return c.json({ error: null, data: deleted });
-	} catch (error) { 
-		console.log(error)
-
-		return c.json({ error, data: null });
+	} catch (error:any) { 
+		return c.json({ error: error.message, data: null },401);
 	}
 	return c.text("Delete admin");
 });
@@ -114,8 +108,6 @@ auth.post("/admin/login", async (c: Context) => {
 				authenticated: true
 			}
 			const token = await sign(payload, process.env.USER_AUTH_KEY || "user_key");
-
-			console.log(token);
 			// setCookie(c, "admin", JSON.stringify(email), {
 			// 	httpOnly: true,
 			// 	secure: true,
@@ -128,7 +120,9 @@ auth.post("/admin/login", async (c: Context) => {
 		}
 
 		return c.json({ error: null, data: loginValid });
-	} catch (error) { }
+	} catch (error:any) {
+		return c.json({ error: error.message, data: null },401);
+	}
 	return c.text("Admin login");
 });
 
@@ -150,13 +144,13 @@ auth.post("/user/create", async (c: Context) => {
 	try {
 		const details = await c.req.json();
 
-		const { email, password } = details;
+		const { email, password, user_metadata } = details;
 
 		if (!email || !password) throw new Error("Invalid email or password");
 
 		const user = await readRecord({ email }, "users");
-		// console.log("user", user);
-		// if (user.length !== 0) throw new Error("User already exists");
+
+		if (user.length !== 0) throw new Error("User already exists");
 
 		const record: any = await createRecord(
 			{
@@ -165,9 +159,7 @@ auth.post("/user/create", async (c: Context) => {
 			},
 			"users"
 		);
-		console.log("in create user",record);
-		
-		// remove password from details
+	
 		delete details.password;
 
 		if (record?.password) {
@@ -175,6 +167,17 @@ auth.post("/user/create", async (c: Context) => {
 		}
 
 		const token = await sign(record, process.env.USER_AUTH_KEY || "user_key");
+
+		const rule_specification = await fetchRules()
+		
+		
+		const rule: any = await createRecord(
+			{
+				email:email,
+				permission: constructRulesMemoryObject(user_metadata, rule_specification.userRules, rule_specification.defaultRuleObject)
+			},
+			'user_rules'
+		)
 
 		return c.json({
 			error: null,
@@ -186,7 +189,7 @@ auth.post("/user/create", async (c: Context) => {
 
 	} catch (error: any) {
 
-		return c.json({ error: error?.message, data: null },400);
+		return c.json({ error: error.message, data: null }, 401);
 	}
 });
 
@@ -196,16 +199,23 @@ auth.post("/user/delete", async (c: Context) => {
 
 		if (!id) throw new Error("Invalid id");
 
+		const user = await readRecord({_id: id}, "users")
+		const user_email: string = user[0]?.email
+	
 		// delete the user
 		const deleted = await deleteRecord({ _id: id }, { multi: false }, "users");
 
 		if (!deleted) throw new Error("Failed to delete user");
 
+		const rules_deleted = await deleteRecord({email: user_email}, { multi: false }, "user_rules")
+
+		if (!rules_deleted) throw new Error("Failed to delete user rules")
+
 		return c.json({ error: null, data: deleted });
 
 	} catch (error:any) {
-		console.log(error);
-		return c.json({ error: error?.message, data: null });
+
+		return c.json({ error: error.message, data: null },401);
 	}
 });
 
@@ -221,36 +231,29 @@ auth.post("/user/login", async (c: Context) => {
 			return c.json({ error: "Invalid email or password", data: null });
 		}
 
-		console.log(email, password);
-
 		// check if an admin exists
 		const user = await readRecord({ email }, "users");
-		console.log(user);
 
 		if (user?.length === 0) {
 			return c.json({ error: "User does not exist", data: null });
 		}
-		// console.log("in login", user[0]);
-
 		const loginValid: boolean = await Bun.password.verify(
 			password,
 			user[0]?.password
 		);
-		console.log(loginValid);
+		// console.log("is login valid",loginValid);
 
 		if (!loginValid) {
-			return c.json({ error: "Invalid login", data: null });
+			return c.json({ error: "Invalid login", data: null },401);
 		}
 
 		if (user[0]?.password) {
 			delete user[0].password;
 		}
 
-		// console.log(user[0]);
-
 		// sign the token
 		const token = await sign(user[0], process.env.USER_AUTH_KEY || "user_key");
-
+		console.log('TOKEN', token);
 		return c.json({
 			error: null,
 			data: {
@@ -261,9 +264,9 @@ auth.post("/user/login", async (c: Context) => {
 				},
 			},
 		});
-	} catch (error) {
-		console.log(error);
-		return c.json({ error, data: null }, 500);
+	} catch (error:any) {
+		console.log("this ",error);
+		return c.json({ error: error.message, data: null },401);
 	}
 });
 
@@ -272,10 +275,11 @@ auth.get("/oauth_redirect", async (c: Context) => {
     const { code } = c.req.query();
 	const oauth = await getSettings("oauth");
 	const application = await getSettings("application");
+	console.log("app",application?.url )
     const oauth2Client = new OAuth2Client({
       clientId: oauth?.client_id,
       clientSecret: oauth?.client_secret,
-      redirectUri: application?.url, // "http://localhost:3690/api/auth/oauth_redirect"
+      redirectUri: application.url+"/api/auth/oauth_redirect"
     });
 
     let token = (await oauth2Client.getToken(code)).tokens.id_token;
@@ -283,43 +287,41 @@ auth.get("/oauth_redirect", async (c: Context) => {
       const user_data = JSON.parse(
         Buffer.from(token.split(".")[1], "base64").toString()
       );
-      console.log(user_data);
       const user = await readRecord({ email: user_data.email }, "users");
-      console.log("user", user[0]);
-	  const user_id = user[0]._id
-      if (user.length !== 0) {
+	  if (user.length !== 0) {
         const jwt = await sign(
           user[0],
           process.env.USER_AUTH_KEY || "user_key"
         );
-        return c.redirect(`http://localhost:5173/?jwt=${jwt}`, 301);
+        return c.redirect(`http://localhost:5173?jwt=${jwt}&user_id=${user[0]._id}`, 301);
       }
+	  console.log("user1", user);
+      console.log("user2", user[0]);
+	  //strip / from url if present
+	  const url = application?.url.replace(/\/$/, "");
+
       let details = {
         email: user_data.email,
         name: user_data.given_name,
         providers: ["google"],
+		user_metadata: {}
       };
-      const record = await createRecord(
+      const record:any = await createRecord(
         {
           ...details,
         },
         "users"
       );
+	  const user_id = record._id
       const jwt = await sign(record, process.env.USER_AUTH_KEY || "user_key");
-      return c.redirect(`http://localhost:5173/?jwt=${jwt}`, 301);
+      return c.redirect(`http://localhost:5173?jwt=${jwt}&user_id=${user_id}`, 301);
     }
     return c.json({
       error: true,
       data: null,
     });
-  } catch (error) {
-    return c.json(
-      {
-        error: error,
-        data: null,
-      },
-      500
-    );
+  } catch (error:any) {
+	return c.json({ error: error.message, data: null },401);
   }
 });
 
@@ -331,10 +333,11 @@ auth.get("/google_oauth", async (c: Context) => {
   try {
 	const oauth = await getSettings("oauth");
 	const application = await getSettings("application");
+	console.log("app 2",application?.url )
     const oauth2Client = new OAuth2Client({
       clientId: oauth?.client_id,
       clientSecret: oauth?.client_secret,
-      redirectUri: application?.url,
+      redirectUri: application.url+"/api/auth/oauth_redirect"
     });
     const authorizeUrl = oauth2Client.generateAuthUrl({
       scope: [
@@ -346,15 +349,8 @@ auth.get("/google_oauth", async (c: Context) => {
       data: authorizeUrl,
       error: null,
     });
-  } catch (error) {
-	console.log(error)
-    return c.json(
-      {
-        error: error,
-        data: null,
-      },
-      500
-    );
+  } catch (error:any) {
+	return c.json({ error: error.message, data: null },401);
   }
 });
 
